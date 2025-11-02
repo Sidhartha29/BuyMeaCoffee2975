@@ -133,13 +133,27 @@ app.get('/.netlify/functions/server/profiles', async (req, res) => {
 // Get profile by ID
 app.get('/.netlify/functions/server/profiles/:id', async (req, res) => {
   try {
+    console.log(`[GET Profile] Looking for profile with id: ${req.params.id}`);
     const profile = await Profile.findOne({ id: req.params.id });
+    
     if (!profile) {
-      return res.status(404).json({ error: 'Profile not found' });
+      console.log(`[GET Profile] Profile not found for id: ${req.params.id}`);
+      return res.status(404).json({ 
+        error: 'Profile not found',
+        message: `No profile found with id: ${req.params.id}`,
+        requestedId: req.params.id
+      });
     }
+    
+    console.log(`[GET Profile] Found profile:`, profile);
     res.json(profile);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error(`[GET Profile] Error:`, error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 

@@ -73,14 +73,38 @@ class ApiClient {
       console.log(`[API] Response status:`, response.status);
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[API] Error response:`, errorText);
-        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+        let errorData;
+        try {
+          const errorText = await response.text();
+          if (errorText) {
+            try {
+              errorData = JSON.parse(errorText);
+            } catch {
+              errorData = { error: errorText };
+            }
+          }
+        } catch (e) {
+          errorData = { error: 'Unknown error' };
+        }
+
+        const error = new Error(errorData?.message || errorData?.error || `HTTP error ${response.status}`);
+        (error as any).status = response.status;
+        (error as any).response = { status: response.status, data: errorData };
+        throw error;
       }
 
-      const data = await response.json();
-      console.log(`[API] Success response:`, data);
-      return data;
+      // For successful responses, try to parse JSON
+      try {
+        const data = await response.json();
+        console.log(`[API] Success response:`, data);
+        return data;
+      } catch (e) {
+        // If response is empty or not JSON
+        if (response.status === 204) {
+          return null as T;
+        }
+        throw new Error('Invalid JSON response');
+      }
     } catch (error) {
       console.error(`[API] Request failed:`, error);
       throw error;
