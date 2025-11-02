@@ -318,7 +318,7 @@ app.put('/api/download-tokens/use/:token', async (req, res) => {
   }
 });
 
-// Export for Vercel serverless functions
+// Export for Netlify functions
 export default app;
 
 // Start server (only for local development)
