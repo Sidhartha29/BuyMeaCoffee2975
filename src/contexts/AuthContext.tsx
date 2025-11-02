@@ -41,19 +41,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // Mock authentication for now - in a real app this would check localStorage or cookies
-    const mockUser = { id: 'user-1', email: 'sidhartha@example.com' };
-    setUser(mockUser);
-    fetchProfile(mockUser.id).then((profileData) => {
-      setProfile(profileData);
+    // Check for existing user session in localStorage
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        setUser(userData);
+        fetchProfile(userData.id).then((profileData) => {
+          setProfile(profileData);
+          setLoading(false);
+        });
+      } catch (error) {
+        console.error('Error parsing stored user:', error);
+        setLoading(false);
+      }
+    } else {
       setLoading(false);
-    });
+    }
   }, []);
 
   const signUp = async (email: string, _password: string, name: string) => {
     // Mock signup - in a real app this would call an API
     const newUser = { id: `user-${Date.now()}`, email };
     setUser(newUser);
+    localStorage.setItem('user', JSON.stringify(newUser));
     await api.createProfile({
       id: newUser.id,
       name,
@@ -65,21 +76,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string) => {
     // Mock signin - in a real app this would call an API
-    const mockUser = { id: `user-${Date.now()}`, email };
-    setUser(mockUser);
+    // First, try to find existing user by email
+    let existingUser = null;
+    try {
+      // This is a simplified approach - in a real app, you'd have a proper user lookup
+      const profiles = await api.getProfiles();
+      const existingProfile = profiles.find(p => p.id.startsWith('user-') && p.name === email.split('@')[0]);
+      if (existingProfile) {
+        existingUser = { id: existingProfile.id, email };
+      }
+    } catch (error) {
+      console.error('Error checking existing users:', error);
+    }
+
+    const userData = existingUser || { id: `user-${Date.now()}`, email };
+    setUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
 
     // Fetch or create profile for this user
-    let profileData = await fetchProfile(mockUser.id);
+    let profileData = await fetchProfile(userData.id);
     if (!profileData) {
       // Create a new profile if it doesn't exist
       await api.createProfile({
-        id: mockUser.id,
+        id: userData.id,
         name: email.split('@')[0], // Use email prefix as default name
         bio: '',
         profile_pic: '',
         wallet_balance: 0,
       });
-      profileData = await fetchProfile(mockUser.id);
+      profileData = await fetchProfile(userData.id);
     }
     setProfile(profileData);
   };
@@ -88,6 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Mock signout
     setUser(null);
     setProfile(null);
+    localStorage.removeItem('user');
   };
 
   const value = {

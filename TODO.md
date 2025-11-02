@@ -1,26 +1,17 @@
-# TODO: Fix Image Deployment Issues
+# TODO: Fix npm warning and server code bug
 
-## 1. Set up Cloudinary Integration
-- [ ] Install Cloudinary SDK in backend
-- [ ] Add Cloudinary config in server.js
-- [ ] Create upload endpoint for images to Cloudinary
-- [ ] Update image creation to use Cloudinary URLs
+## 1. Update Express version in package.json
+- [x] Change Express from "^5.1.0" to "^4.19.2" to avoid deprecated path-match dependency
 
-## 2. Update Frontend Upload Logic
-- [ ] Modify Dashboard.tsx to upload files to new endpoint instead of base64
-- [ ] Update API client to handle file uploads
-- [ ] Test image upload functionality
+## 2. Fix corrupted code in database/server.js
+- [ ] Fix the malformed catch block in the upload endpoint (line around 70-80)
 
-## 3. Fix Database Consistency
-- [ ] Ensure MongoDB URI is consistent across environments
-- [ ] Update seed.js with Cloudinary URLs for demo images
-- [ ] Run seed script on production database
+## 3. Run npm install
+- [x] Execute npm install to update dependencies
 
-## 4. Update CORS for Netlify Deployment
-- [ ] Update server.js CORS settings for Netlify domain
-- [ ] Test API endpoints from deployed frontend
+## 4. Restart backend server
+- [x] Stop and restart the backend server to apply changes
 
-## 5. Testing
-- [ ] Test image upload and display locally
-- [ ] Deploy to Netlify and test cross-device functionality
-- [ ] Verify all image-related features work
+## 5. Test key endpoints
+- [x] Test /api/profiles, /api/images, /api/transactions endpoints
+- [x] Verify upload endpoint works correctly
