@@ -75,38 +75,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signIn = async (email: string) => {
-    // Mock signin - in a real app this would call an API
-    // First, try to find existing user by email
-    let existingUser = null;
     try {
-      // This is a simplified approach - in a real app, you'd have a proper user lookup
+      // First, try to find existing user by email
       const profiles = await api.getProfiles();
       const existingProfile = profiles.find(p => p.id.startsWith('user-') && p.name === email.split('@')[0]);
+
       if (existingProfile) {
-        existingUser = { id: existingProfile.id, email };
+        // User exists, sign them in
+        const userData = { id: existingProfile.id, email };
+        setUser(userData);
+        localStorage.setItem('user', JSON.stringify(userData));
+        setProfile(existingProfile);
+      } else {
+        // User doesn't exist, create new profile and sign them in
+        const userData = { id: `user-${Date.now()}`, email };
+        setUser(userData);
+        localStorage.setItem('user', JSON.stringify(userData));
+
+        await api.createProfile({
+          id: userData.id,
+          name: email.split('@')[0], // Use email prefix as default name
+          bio: '',
+          profile_pic: '',
+          wallet_balance: 0,
+        });
+
+        const profileData = await fetchProfile(userData.id);
+        setProfile(profileData);
       }
     } catch (error) {
-      console.error('Error checking existing users:', error);
+      console.error('Error during sign in:', error);
+      throw new Error('Failed to sign in. Please try again.');
     }
-
-    const userData = existingUser || { id: `user-${Date.now()}`, email };
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
-
-    // Fetch or create profile for this user
-    let profileData = await fetchProfile(userData.id);
-    if (!profileData) {
-      // Create a new profile if it doesn't exist
-      await api.createProfile({
-        id: userData.id,
-        name: email.split('@')[0], // Use email prefix as default name
-        bio: '',
-        profile_pic: '',
-        wallet_balance: 0,
-      });
-      profileData = await fetchProfile(userData.id);
-    }
-    setProfile(profileData);
   };
 
   const signOut = async () => {

@@ -24,7 +24,7 @@ const app = express();
 // Middleware
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
-    ? [process.env.NETLIFY_DOMAIN || 'https://your-netlify-app.netlify.app', process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://your-vercel-app.vercel.app']
+    ? [process.env.NETLIFY_DOMAIN || 'https://buymeacoffee297518.netlify.app', process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://buymeacoffee297518.netlify.app']
     : 'http://localhost:5173',
   credentials: true
 }));
