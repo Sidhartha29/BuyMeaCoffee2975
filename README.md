@@ -63,42 +63,46 @@ A modern image marketplace where creators can sell high-resolution images to buy
    http://localhost:5173
    ```
 
-## Deployment to Vercel
+## Deployment
 
-### 1. Prepare MongoDB Atlas
+### Backend (Vercel)
 
-1. Create a MongoDB Atlas account at [mongodb.com/atlas](https://mongodb.com/atlas)
-2. Create a new cluster (free tier is fine)
-3. Create a database user with read/write permissions
-4. Get your connection string from the "Connect" section
+1. **Prepare MongoDB Atlas**
+   - Create a MongoDB Atlas account at [mongodb.com/atlas](https://mongodb.com/atlas)
+   - Create a new cluster (free tier is fine)
+   - Create a database user with read/write permissions
+   - Get your connection string from the "Connect" section
 
-### 2. Deploy to Vercel
-
-1. **Install Vercel CLI** (optional, but recommended)
-   ```bash
-   npm i -g vercel
-   ```
-
-2. **Deploy the project**
-   ```bash
-   vercel
-   ```
-
-3. **Configure environment variables in Vercel**
-   - Go to your Vercel dashboard
-   - Select your project
-   - Go to Settings → Environment Variables
-   - Add:
+2. **Deploy Backend to Vercel**
+   - Install Vercel CLI: `npm i -g vercel`
+   - Deploy: `vercel`
+   - Configure environment variables in Vercel dashboard:
      - `MONGODB_URI`: Your MongoDB Atlas connection string
+     - `CLOUDINARY_CLOUD_NAME`: Your Cloudinary cloud name
+     - `CLOUDINARY_API_KEY`: Your Cloudinary API key
+     - `CLOUDINARY_API_SECRET`: Your Cloudinary API secret
      - `NODE_ENV`: `production`
 
-4. **Update CORS settings**
-   - In `database/server.js`, replace `https://your-vercel-app.vercel.app` with your actual Vercel domain
-
-5. **Redeploy**
+3. **Seed the database** (optional, for demo data)
    ```bash
-   vercel --prod
+   node database/seed.js
    ```
+
+### Frontend (Netlify)
+
+1. **Deploy Frontend to Netlify**
+   - Connect your GitHub repository to Netlify
+   - Set build command: `npm run build`
+   - Set publish directory: `dist`
+   - Add environment variables:
+     - `VITE_API_BASE_URL`: Your Vercel backend URL + `/api` (e.g., `https://your-app.vercel.app/api`)
+
+2. **Update CORS in Backend**
+   - In Vercel dashboard, add environment variable:
+     - `NETLIFY_DOMAIN`: Your Netlify domain (e.g., `https://amazing-site.netlify.app`)
+
+3. **Update netlify.toml**
+   - Replace `https://your-vercel-app.vercel.app` with your actual Vercel domain
 
 ## Project Structure
 
