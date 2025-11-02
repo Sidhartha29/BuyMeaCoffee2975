@@ -365,24 +365,10 @@ app.post('/.netlify/functions/server/upload', upload.fields([
       thumbnail: thumbnailResult.secure_url
     });
 
-    // Send success response
-    res.json({
+    // Send success response with required URLs
+    res.status(200).json({
       image_url: imageResult.secure_url,
-      thumbnail_url: thumbnailResult.secure_url,
-      details: {
-        image: {
-          public_id: imageResult.public_id,
-          format: imageResult.format,
-          width: imageResult.width,
-          height: imageResult.height
-        },
-        thumbnail: {
-          public_id: thumbnailResult.public_id,
-          format: thumbnailResult.format,
-          width: thumbnailResult.width,
-          height: thumbnailResult.height
-        }
-      }
+      thumbnail_url: thumbnailResult.secure_url
     });
 
   } catch (error) {

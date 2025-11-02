@@ -171,14 +171,26 @@ class ApiClient {
       console.log('[Upload] Response status:', response.status);
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[Upload] Error response:', errorText);
-        throw new Error(`Upload failed: ${response.status} ${response.statusText} - ${errorText}`);
+        let errorMessage;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || `Upload failed: ${response.status} ${response.statusText}`;
+        } catch {
+          const errorText = await response.text();
+          errorMessage = errorText || `Upload failed: ${response.status} ${response.statusText}`;
+        }
+        console.error('[Upload] Error response:', errorMessage);
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
-      console.log('[Upload] Success response:', data);
-      return data;
+      try {
+        const data = await response.json();
+        console.log('[Upload] Success response:', data);
+        return data;
+      } catch (error) {
+        console.error('[Upload] Failed to parse response:', error);
+        throw new Error('Invalid response from server: No JSON data');
+      }
     } catch (error) {
       console.error('[Upload] Request failed:', error);
       throw error;
