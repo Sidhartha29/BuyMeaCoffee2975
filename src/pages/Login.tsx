@@ -43,25 +43,35 @@ export const Login: React.FC<LoginProps> = ({ onNavigate }) => {
           </div>
         )}
 
+        {/* Demo Credentials */}
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+          <h3 className="text-sm font-medium text-amber-800 mb-2">Demo Credentials</h3>
+          <p className="text-xs text-amber-700">
+            <strong>User ID:</strong> user-1<br/>
+            <strong>Name:</strong> Sidhartha<br/>
+            <strong>Bio:</strong> Creative photographer capturing moments
+          </p>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address
+              User ID
             </label>
             <input
               id="email"
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-              placeholder="you@example.com"
+              placeholder="user-1"
             />
           </div>
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Password
+              Password (any value)
             </label>
             <input
               id="password"
