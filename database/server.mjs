@@ -1,9 +1,4 @@
 import dotenv from 'dotenv';
-import { dirname, resolve } from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: resolve(__dirname, '../.env') });
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -12,6 +7,9 @@ import multer from 'multer';
 import connectDB from './connection.js';
 import { Profile, Image, Transaction, DownloadToken } from './models.js';
 import serverless from 'serverless-http';
+
+// Load environment variables
+dotenv.config();
 
 // Configure Cloudinary
 cloudinary.config({
@@ -254,6 +252,30 @@ const uploadToCloudinary = (buffer, folder, publicId) => {
 app.get('/.netlify/functions/server', (req, res) => {
   res.json({ message: 'API is working!' });
 });
+
+// Helper function to upload to Cloudinary with timeout
+const uploadToCloudinaryWithTimeout = async (buffer, folder, publicId) => {
+  return Promise.race([
+    new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Upload timeout')), 25000)
+    ),
+    new Promise((resolve, reject) => {
+      cloudinary.uploader
+        .upload_stream(
+          {
+            folder,
+            public_id: publicId,
+            resource_type: 'auto',
+          },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        )
+        .end(buffer);
+    }),
+  ]);
+};
 
 // Upload image endpoint
 app.post('/.netlify/functions/server/upload', upload.fields([

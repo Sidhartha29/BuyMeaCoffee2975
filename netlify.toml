@@ -7,6 +7,10 @@
 
 [functions]
   directory = "database"
+  node_bundler = "esbuild"
+  
+[functions.server]
+  timeout = 30
 
 [[redirects]]
   from = "/api/*"

@@ -160,14 +160,19 @@ class ApiClient {
     console.log('[Upload] Starting upload to:', url);
     console.log('[Upload] Files:', { image: imageFile, thumbnail: thumbnailFile });
 
+    // Set longer timeout for upload
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
+
     try {
       const response = await fetch(url, {
         method: 'POST',
         body: formData,
-        // Don't set Content-Type header - browser will set it with boundary
-        credentials: 'include', // Include cookies if any
+        signal: controller.signal,
+        credentials: 'include',
       });
 
+      clearTimeout(timeoutId);
       console.log('[Upload] Response status:', response.status);
 
       if (!response.ok) {
@@ -179,18 +184,12 @@ class ApiClient {
           const errorText = await response.text();
           errorMessage = errorText || `Upload failed: ${response.status} ${response.statusText}`;
         }
-        console.error('[Upload] Error response:', errorMessage);
         throw new Error(errorMessage);
       }
 
-      try {
-        const data = await response.json();
-        console.log('[Upload] Success response:', data);
-        return data;
-      } catch (error) {
-        console.error('[Upload] Failed to parse response:', error);
-        throw new Error('Invalid response from server: No JSON data');
-      }
+      const data = await response.json();
+      console.log('[Upload] Success response:', data);
+      return data;
     } catch (error) {
       console.error('[Upload] Request failed:', error);
       throw error;
