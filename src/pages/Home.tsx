@@ -143,6 +143,9 @@ export const Home: React.FC<HomeProps> = ({ onNavigate }) => {
                       src={image.thumbnail_url.startsWith('data:') ? image.thumbnail_url : image.thumbnail_url}
                       alt={image.title}
                       className="w-full h-full object-cover"
+                      onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+                        e.currentTarget.src = '/placeholder.svg';
+                      }}
                     />
                   </div>
                   <div className="p-6">

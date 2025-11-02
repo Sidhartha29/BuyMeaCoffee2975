@@ -74,19 +74,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const signIn = async (userId: string) => {
+  const signIn = async (userId: string, _password: string) => {
     try {
+      console.log('Attempting to sign in with userId:', userId);
+      
       // Try to find existing user by userId
       const profileData = await api.getProfile(userId);
+      console.log('Profile data received:', profileData);
 
       if (profileData) {
         // User exists, sign them in
+        console.log('Existing user found, signing in');
         const userData = { id: profileData.id, email: `${profileData.name}@demo.com` };
         setUser(userData);
         localStorage.setItem('user', JSON.stringify(userData));
         setProfile(profileData);
       } else {
         // User doesn't exist, create new profile and sign them in
+        console.log('User not found, creating new profile');
         const userData = { id: userId, email: `${userId}@demo.com` };
         setUser(userData);
         localStorage.setItem('user', JSON.stringify(userData));

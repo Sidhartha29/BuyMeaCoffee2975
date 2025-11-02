@@ -1,5 +1,14 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
+// Debug: print the resolved API base URL at module load so we can verify the value
+// (This will be visible in the browser console when the app loads in dev).
+try {
+  // eslint-disable-next-line no-console
+  console.log('[debug] API_BASE_URL =', API_BASE_URL);
+} catch (e) {
+  // ignore in environments without console
+}
+
 export interface Profile {
   id: string;
   name: string;
@@ -50,19 +59,32 @@ export interface DownloadToken {
 class ApiClient {
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-      ...options,
-    });
+    console.log(`[API] Making request to: ${url}`);
+    
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...options?.headers,
+        },
+        ...options,
+      });
 
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.statusText}`);
+      console.log(`[API] Response status:`, response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[API] Error response:`, errorText);
+        throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log(`[API] Success response:`, data);
+      return data;
+    } catch (error) {
+      console.error(`[API] Request failed:`, error);
+      throw error;
     }
-
-    return response.json();
   }
 
   // Profiles
@@ -111,16 +133,32 @@ class ApiClient {
     formData.append('thumbnail', thumbnailFile);
 
     const url = `${API_BASE_URL}/upload`;
-    const response = await fetch(url, {
-      method: 'POST',
-      body: formData,
-    });
+    console.log('[Upload] Starting upload to:', url);
+    console.log('[Upload] Files:', { image: imageFile, thumbnail: thumbnailFile });
 
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`);
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        // Don't set Content-Type header - browser will set it with boundary
+        credentials: 'include', // Include cookies if any
+      });
+
+      console.log('[Upload] Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Upload] Error response:', errorText);
+        throw new Error(`Upload failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('[Upload] Success response:', data);
+      return data;
+    } catch (error) {
+      console.error('[Upload] Request failed:', error);
+      throw error;
     }
-
-    return response.json();
   }
 
   async createImage(image: Omit<Image, 'created_at' | 'updated_at'>): Promise<Image> {

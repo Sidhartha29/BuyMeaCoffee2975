@@ -25,8 +25,9 @@ const app = express();
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
     ? [process.env.NETLIFY_DOMAIN || 'https://buymeacoffee297518.netlify.app', process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://buymeacoffee297518.netlify.app']
-    : 'http://localhost:5173',
-  credentials: true
+    : ['http://localhost:5173', 'http://127.0.0.1:5173'], // Allow both localhost and IP
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Explicitly allow methods
 }));
 app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ limit: '200mb', extended: true }));
@@ -60,11 +61,35 @@ app.post('/api/upload', upload.fields([
   { name: 'thumbnail', maxCount: 1 }
 ]), async (req, res) => {
   try {
-    const { image, thumbnail } = req.files;
+    // Log received files
+    console.log('Upload request received:', {
+      files: req.files,
+      contentType: req.headers['content-type']
+    });
+
+    // Validate Cloudinary configuration
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      console.error('Cloudinary configuration missing');
+      return res.status(500).json({ error: 'Server configuration error' });
+    }
+
+    const { image, thumbnail } = req.files || {};
 
     if (!image || !thumbnail) {
-      return res.status(400).json({ error: 'Both image and thumbnail are required' });
+      console.error('Missing required files:', { hasImage: !!image, hasThumbnail: !!thumbnail });
+      return res.status(400).json({ 
+        error: 'Both image and thumbnail are required',
+        received: {
+          image: !!image,
+          thumbnail: !!thumbnail
+        }
+      });
     }
+
+    console.log('Processing files:', {
+      image: { size: image[0].size, mimetype: image[0].mimetype },
+      thumbnail: { size: thumbnail[0].size, mimetype: thumbnail[0].mimetype }
+    });
 
     const imagePublicId = `images/${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const thumbnailPublicId = `thumbnails/${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -74,13 +99,21 @@ app.post('/api/upload', upload.fields([
       uploadToCloudinary(thumbnail[0].buffer, 'thumbnails', thumbnailPublicId),
     ]);
 
+    console.log('Upload successful:', {
+      image: imageResult.secure_url,
+      thumbnail: thumbnailResult.secure_url
+    });
+
     res.json({
       image_url: imageResult.secure_url,
       thumbnail_url: thumbnailResult.secure_url,
     });
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({ error: 'Failed to upload images' });
+    res.status(500).json({ 
+      error: 'Failed to upload images',
+      details: error.message
+    });
   }
 });
 

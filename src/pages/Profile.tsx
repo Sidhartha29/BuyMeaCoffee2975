@@ -135,6 +135,9 @@ export const Profile: React.FC<ProfileProps> = ({ creatorId, onNavigate }) => {
                     src={image.thumbnail_url.startsWith('data:') ? image.thumbnail_url : image.thumbnail_url}
                     alt={image.title}
                     className="w-full h-full object-cover"
+                    onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+                      e.currentTarget.src = '/placeholder.svg';
+                    }}
                   />
                 </div>
                 <div className="p-6">
@@ -174,6 +177,9 @@ export const Profile: React.FC<ProfileProps> = ({ creatorId, onNavigate }) => {
                 src={selectedImage.thumbnail_url}
                 alt={selectedImage.title}
                 className="w-full h-48 object-cover rounded-lg mb-4"
+                onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+                  e.currentTarget.src = '/placeholder.svg';
+                }}
               />
               <h3 className="text-xl font-bold text-gray-900 mb-2">{selectedImage.title}</h3>
               <p className="text-gray-600 mb-4">{selectedImage.description}</p>

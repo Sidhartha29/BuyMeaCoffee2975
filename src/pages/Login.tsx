@@ -8,7 +8,7 @@ interface LoginProps {
 
 export const Login: React.FC<LoginProps> = ({ onNavigate }) => {
   const { signIn } = useAuth();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('user-1'); // Default to demo user
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,10 +19,11 @@ export const Login: React.FC<LoginProps> = ({ onNavigate }) => {
     setLoading(true);
 
     try {
-      await signIn(email, password);
+      await signIn(email, password); // email is actually userId in our case
       onNavigate('dashboard');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to sign in');
+      console.error('Login error:', err); // Add debug logging
+      setError(err instanceof Error ? err.message : 'Failed to sign in. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -55,11 +56,11 @@ export const Login: React.FC<LoginProps> = ({ onNavigate }) => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="userId" className="block text-sm font-medium text-gray-700 mb-2">
               User ID
             </label>
             <input
-              id="email"
+              id="userId"
               type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

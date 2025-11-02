@@ -172,6 +172,9 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
                       alt={image.title}
                       className="w-full h-full object-cover"
                       loading="lazy"
+                      onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+                        e.currentTarget.src = '/placeholder.svg';
+                      }}
                     />
                   </div>
                   <div className="p-6">

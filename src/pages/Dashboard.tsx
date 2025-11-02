@@ -205,6 +205,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                     src={image.thumbnail_url}
                     alt={image.title}
                     className="w-full h-full object-cover"
+                    onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+                      e.currentTarget.src = '/placeholder.svg';
+                    }}
                   />
                 </div>
                 <div className="p-6">
