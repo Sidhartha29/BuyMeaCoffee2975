@@ -116,12 +116,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
 
+      const now = new Date().toISOString();
       const newProfile = {
         id: userId,
         name: userId, // Use userId as default name
         bio: '',
         profile_pic: '',
         wallet_balance: 0,
+        created_at: now,
+        updated_at: now,
       };
 
       await api.createProfile(newProfile);

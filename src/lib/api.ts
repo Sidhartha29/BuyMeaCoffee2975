@@ -135,12 +135,12 @@ class ApiClient {
   }
 
   // Images
-  async getImages(page?: number, limit?: number): Promise<{ images: Image[]; pagination: { page: number; limit: number; total: number; pages: number } }> {
-    const params = new URLSearchParams();
-    if (page) params.append('page', page.toString());
-    if (limit) params.append('limit', limit.toString());
-    const query = params.toString() ? `?${params.toString()}` : '';
-    return this.request(`/images${query}`);
+  async getImages(page?: number, limit?: number): Promise<{ images: Image[]; pagination: { page: number; pages: number; total: number } }> {
+    const queryParams = new URLSearchParams();
+    if (page) queryParams.append('page', page.toString());
+    if (limit) queryParams.append('limit', limit.toString());
+    const data = await this.request<{ images: Image[]; pagination: { page: number; pages: number; total: number } }>(`/images?${queryParams.toString()}`);
+    return data;
   }
 
   async getImage(id: string): Promise<Image> {

@@ -1,5 +1,9 @@
 import dotenv from 'dotenv';
-dotenv.config();
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: resolve(__dirname, '../.env') });
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -23,13 +27,34 @@ const upload = multer({ storage });
 const app = express();
 
 // Middleware
+// CORS configuration
+// Allow production host and common local dev origins (include Vite fallback port 5174)
+const devOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5174',
+];
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? ['https://buymeacoffee297518.netlify.app']
-    : ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: (origin, callback) => {
+    // Allow non-browser (server-to-server) requests with no origin
+    if (!origin) return callback(null, true);
+
+    if (process.env.NODE_ENV === 'production') {
+      const allowed = ['https://buymeacoffee297518.netlify.app'];
+      return allowed.includes(origin) ? callback(null, true) : callback(null, false);
+    }
+
+    // Development: allow local dev origins
+    return devOrigins.includes(origin) ? callback(null, true) : callback(null, false);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
+
+// Ensure preflight requests are handled
+app.options('*', cors());
 
 app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ limit: '200mb', extended: true }));
@@ -37,21 +62,191 @@ app.use(express.urlencoded({ limit: '200mb', extended: true }));
 // Connect to database
 connectDB();
 
+// Path alias middleware to support both /api and /.netlify/functions/server paths
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    console.log(`[Route] Rewriting ${req.path} to /.netlify/functions/server/*`);
+    req.url = req.url.replace(/^\/api/, '/.netlify/functions/server');
+  }
+  next();
+});
+
+// Get all images with pagination
+app.get('/.netlify/functions/server/images', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const [images, total] = await Promise.all([
+      Image.find()
+        .sort({ created_at: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('creator_id', 'name profilePicture'),
+      Image.countDocuments()
+    ]);
+
+    const pages = Math.ceil(total / limit);
+
+    res.json({
+      images,
+      pagination: {
+        page,
+        pages,
+        total
+      }
+    });
+  } catch (error) {
+    console.error('[Images] Error fetching all:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Transactions
+app.get('/.netlify/functions/server/transactions', async (req, res) => {
+  try {
+    const transactions = await Transaction.find();
+    res.json(transactions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/.netlify/functions/server/transactions/creator/:creatorId', async (req, res) => {
+  try {
+    console.log(`[Transactions] Fetching for creator: ${req.params.creatorId}`);
+    const transactions = await Transaction.find({ creator_id: req.params.creatorId });
+    res.json(transactions);
+  } catch (error) {
+    console.error('[Transactions] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Images
+app.post('/.netlify/functions/server/images', async (req, res) => {
+  try {
+    console.log('[Images] Creating new image:', req.body);
+    const image = new Image({
+      ...req.body,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+    await image.save();
+    console.log('[Images] Created:', image);
+    res.status(201).json(image);
+  } catch (error) {
+    console.error('[Images] Error creating:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/.netlify/functions/server/images/creator/:creatorId', async (req, res) => {
+  try {
+    console.log(`[Images] Fetching for creator: ${req.params.creatorId}`);
+    const images = await Image.find({ creator_id: req.params.creatorId })
+      .sort({ created_at: -1 });
+    res.json(images);
+  } catch (error) {
+    console.error('[Images] Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/.netlify/functions/server/images/:id', async (req, res) => {
+  try {
+    const image = await Image.findById(req.params.id);
+    if (!image) return res.status(404).json({ error: 'Image not found' });
+    res.json(image);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/.netlify/functions/server/images/:id', async (req, res) => {
+  try {
+    const image = await Image.findById(req.params.id);
+    if (!image) return res.status(404).json({ error: 'Image not found' });
+    Object.assign(image, { ...req.body, updated_at: new Date().toISOString() });
+    await image.save();
+    res.json(image);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/.netlify/functions/server/images/:id', async (req, res) => {
+  try {
+    const image = await Image.findById(req.params.id);
+    if (!image) return res.status(404).json({ error: 'Image not found' });
+    await image.deleteOne();
+    res.json({ message: 'Image deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/.netlify/functions/server/transactions', async (req, res) => {
+  try {
+    const transaction = new Transaction({
+      ...req.body,
+      created_at: new Date().toISOString()
+    });
+    await transaction.save();
+    res.status(201).json(transaction);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Helper function to upload to Cloudinary
 const uploadToCloudinary = (buffer, folder, publicId) => {
   return new Promise((resolve, reject) => {
+    console.log(`Attempting Cloudinary upload: ${folder}/${publicId}`);
+    
+    const uploadOptions = {
+      folder,
+      public_id: publicId,
+      resource_type: 'auto',
+      overwrite: true,
+      invalidate: true,
+    };
+
     const stream = cloudinary.uploader.upload_stream(
-      {
-        folder,
-        public_id: publicId,
-        resource_type: 'auto',
-      },
+      uploadOptions,
       (error, result) => {
-        if (error) reject(error);
-        else resolve(result);
+        if (error) {
+          console.error('Cloudinary upload failed:', {
+            folder,
+            publicId,
+            error: error.message,
+            code: error.http_code
+          });
+          reject(new Error(`Cloudinary upload failed: ${error.message}`));
+        } else {
+          console.log('Cloudinary upload successful:', {
+            folder,
+            publicId,
+            url: result.secure_url
+          });
+          resolve(result);
+        }
       }
     );
-    stream.end(buffer);
+
+    // Handle stream errors
+    stream.on('error', (error) => {
+      console.error('Stream error during upload:', error);
+      reject(new Error('Stream error during upload'));
+    });
+
+    try {
+      stream.end(buffer);
+    } catch (error) {
+      console.error('Error writing to stream:', error);
+      reject(new Error('Error writing to upload stream'));
+    }
   });
 };
 
@@ -65,38 +260,101 @@ app.post('/.netlify/functions/server/upload', upload.fields([
   { name: 'image', maxCount: 1 },
   { name: 'thumbnail', maxCount: 1 }
 ]), async (req, res) => {
-  try {
-    console.log('Upload request received:', {
-      files: req.files,
-      contentType: req.headers['content-type']
-    });
+  console.log('Upload request received:', {
+    files: req.files ? Object.keys(req.files) : 'no files',
+    contentType: req.headers['content-type'],
+    cloudinary: {
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME ? 'set' : 'missing',
+      apiKey: process.env.CLOUDINARY_API_KEY ? 'set' : 'missing',
+      apiSecret: process.env.CLOUDINARY_API_SECRET ? 'set' : 'missing'
+    }
+  });
 
+  try {
+    // Verify Cloudinary configuration
     if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-      console.error('Cloudinary configuration missing');
-      return res.status(500).json({ error: 'Server configuration error' });
+      const error = 'Cloudinary configuration incomplete. Please check environment variables.';
+      console.error(error, {
+        cloudName: !!process.env.CLOUDINARY_CLOUD_NAME,
+        apiKey: !!process.env.CLOUDINARY_API_KEY,
+        apiSecret: !!process.env.CLOUDINARY_API_SECRET
+      });
+      return res.status(500).json({ error });
     }
 
-    const { image, thumbnail } = req.files || {};
+    // Initial request validation
+    if (!req.files || (!req.files.image?.length && !req.files.thumbnail?.length)) {
+      const error = 'No files were uploaded';
+      console.error(error, { 
+        files: req.files ? Object.keys(req.files) : 'none',
+        image: req.files?.image?.length || 0,
+        thumbnail: req.files?.thumbnail?.length || 0
+      });
+      return res.status(400).json({ error });
+    }
 
-    if (!image || !thumbnail) {
-      console.error('Missing required files:', { hasImage: !!image, hasThumbnail: !!thumbnail });
+    const { image, thumbnail } = req.files;
+
+    // Validate both files are present
+    if (!image?.[0] || !thumbnail?.[0]) {
+      console.error('Missing required files:', { 
+        hasImage: !!image?.[0], 
+        hasThumbnail: !!thumbnail?.[0],
+        imageDetails: image?.[0] ? { size: image[0].size, type: image[0].mimetype } : 'missing',
+        thumbnailDetails: thumbnail?.[0] ? { size: thumbnail[0].size, type: thumbnail[0].mimetype } : 'missing'
+      });
       return res.status(400).json({
         error: 'Both image and thumbnail are required',
         received: {
-          image: !!image,
-          thumbnail: !!thumbnail
+          image: !!image?.[0],
+          thumbnail: !!thumbnail?.[0]
         }
       });
     }
 
-    console.log('Processing files:', {
+    // Validate file sizes (10MB limit)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    for (const [fieldname, files] of Object.entries(req.files)) {
+      const file = files[0];
+      if (file.size > MAX_FILE_SIZE) {
+        const error = `${fieldname} file size exceeds 10MB limit`;
+        console.warn(error, {
+          fieldname,
+          size: file.size,
+          limit: MAX_FILE_SIZE
+        });
+        return res.status(400).json({ error });
+      }
+    }
+
+    // Validate file types
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    for (const [fieldname, files] of Object.entries(req.files)) {
+      const file = files[0];
+      if (!allowedMimeTypes.includes(file.mimetype)) {
+        const error = `Invalid file type for ${fieldname}. Only JPEG, PNG, and WebP images are allowed.`;
+        console.warn(error, {
+          fieldname,
+          mimetype: file.mimetype,
+          allowedTypes: allowedMimeTypes
+        });
+        return res.status(400).json({ error });
+      }
+    }
+
+    console.log('Files validated successfully:', {
       image: { size: image[0].size, mimetype: image[0].mimetype },
       thumbnail: { size: thumbnail[0].size, mimetype: thumbnail[0].mimetype }
     });
 
-    const imagePublicId = `images/${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const thumbnailPublicId = `thumbnails/${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Generate unique IDs for Cloudinary
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substr(2, 9);
+    const imagePublicId = `images/${timestamp}-${randomId}-img`;
+    const thumbnailPublicId = `thumbnails/${timestamp}-${randomId}-thumb`;
 
+    // Upload to Cloudinary
+    console.log('Initiating Cloudinary upload...');
     const [imageResult, thumbnailResult] = await Promise.all([
       uploadToCloudinary(image[0].buffer, 'images', imagePublicId),
       uploadToCloudinary(thumbnail[0].buffer, 'thumbnails', thumbnailPublicId),
@@ -107,13 +365,50 @@ app.post('/.netlify/functions/server/upload', upload.fields([
       thumbnail: thumbnailResult.secure_url
     });
 
+    // Send success response
     res.json({
       image_url: imageResult.secure_url,
       thumbnail_url: thumbnailResult.secure_url,
+      details: {
+        image: {
+          public_id: imageResult.public_id,
+          format: imageResult.format,
+          width: imageResult.width,
+          height: imageResult.height
+        },
+        thumbnail: {
+          public_id: thumbnailResult.public_id,
+          format: thumbnailResult.format,
+          width: thumbnailResult.width,
+          height: thumbnailResult.height
+        }
+      }
     });
+
   } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({
+    // Log error with detailed context
+    console.error('Upload error:', {
+      message: error.message,
+      stack: error.stack,
+      requestFiles: req.files ? {
+        image: req.files.image?.[0] ? {
+          size: req.files.image[0].size,
+          type: req.files.image[0].mimetype
+        } : 'missing',
+        thumbnail: req.files.thumbnail?.[0] ? {
+          size: req.files.thumbnail[0].size,
+          type: req.files.thumbnail[0].mimetype
+        } : 'missing'
+      } : 'no files'
+    });
+
+    // Determine appropriate status code
+    const statusCode = error.message.includes('configuration') ? 500 :
+                      error.message.includes('file size') || 
+                      error.message.includes('file type') ? 400 : 500;
+
+    // Send error response
+    res.status(statusCode).json({
       error: 'Failed to upload images',
       details: error.message
     });
@@ -177,6 +472,94 @@ app.put('/.netlify/functions/server/profiles/:id', async (req, res) => {
       { new: true }
     );
     res.json(profile);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Images endpoints (mirror of server.js /api/images) ---
+// Get all images
+app.get('/api/images', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const images = await Image.find()
+      .populate('creator_id')
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Image.countDocuments();
+
+    res.json({
+      images,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get image by ID
+app.get('/api/images/:id', async (req, res) => {
+  try {
+    const image = await Image.findOne({ id: req.params.id });
+    if (!image) return res.status(404).json({ error: 'Image not found' });
+    res.json(image);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get images by creator
+app.get('/api/images/creator/:creatorId', async (req, res) => {
+  try {
+    const images = await Image.find({ creator_id: req.params.creatorId }).populate('creator_id');
+    res.json(images);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create image
+app.post('/api/images', async (req, res) => {
+  try {
+    const image = new Image(req.body);
+    await image.save();
+    res.status(201).json(image);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Update image
+app.put('/api/images/:id', async (req, res) => {
+  try {
+    const image = await Image.findOneAndUpdate(
+      { id: req.params.id },
+      req.body,
+      { new: true }
+    );
+    if (!image) return res.status(404).json({ error: 'Image not found' });
+    res.json(image);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Delete image
+app.delete('/api/images/:id', async (req, res) => {
+  try {
+    const image = await Image.findOneAndDelete({ id: req.params.id });
+    if (!image) return res.status(404).json({ error: 'Image not found' });
+    res.json({ message: 'Image deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
