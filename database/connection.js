@@ -7,7 +7,10 @@ const connectDB = async () => {
       return;
     }
 
-    const mongoURI = process.env.MONGODB_URI || 'mongodb+srv://sidharthakalva_db_user:rhode@cluster0.h4mgbtv.mongodb.net/';
+    const mongoURI = process.env.MONGODB_URI;
+    if (!mongoURI) {
+      throw new Error('MONGODB_URI environment variable is not set');
+    }
 
     // Use different connection options for production
     const options = process.env.NODE_ENV === 'production'
