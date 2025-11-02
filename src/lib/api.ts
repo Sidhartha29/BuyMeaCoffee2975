@@ -175,21 +175,34 @@ class ApiClient {
       clearTimeout(timeoutId);
       console.log('[Upload] Response status:', response.status);
 
-      if (!response.ok) {
-        let errorMessage;
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || `Upload failed: ${response.status} ${response.statusText}`;
-        } catch {
-          const errorText = await response.text();
-          errorMessage = errorText || `Upload failed: ${response.status} ${response.statusText}`;
-        }
+      // Always try to read the response body
+      let responseBody;
+      try {
+        responseBody = await response.json();
+        console.log('[Upload] Response body:', responseBody);
+      } catch (error) {
+        console.error('[Upload] Failed to parse response as JSON:', error);
+        throw new Error(`Upload failed: Server returned status ${response.status} with invalid JSON`);
+      }
+
+      // Check for error responses
+      if (!response.ok || responseBody.error) {
+        const errorMessage = responseBody.error || responseBody.details || `Upload failed: ${response.status} ${response.statusText}`;
+        console.error('[Upload] Error response:', errorMessage);
         throw new Error(errorMessage);
       }
 
-      const data = await response.json();
-      console.log('[Upload] Success response:', data);
-      return data;
+      // Validate response has required fields
+      if (!responseBody.image_url || !responseBody.thumbnail_url) {
+        console.error('[Upload] Invalid success response:', responseBody);
+        throw new Error('Upload failed: Server response missing required URLs');
+      }
+
+      console.log('[Upload] Success response:', responseBody);
+      return {
+        image_url: responseBody.image_url,
+        thumbnail_url: responseBody.thumbnail_url
+      };
     } catch (error) {
       console.error('[Upload] Request failed:', error);
       throw error;

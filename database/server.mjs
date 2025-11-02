@@ -375,23 +375,32 @@ app.post('/.netlify/functions/server/upload', upload.fields([
     const imagePublicId = `images/${timestamp}-${randomId}-img`;
     const thumbnailPublicId = `thumbnails/${timestamp}-${randomId}-thumb`;
 
-    // Upload to Cloudinary
-    console.log('Initiating Cloudinary upload...');
-    const [imageResult, thumbnailResult] = await Promise.all([
-      uploadToCloudinary(image[0].buffer, 'images', imagePublicId),
-      uploadToCloudinary(thumbnail[0].buffer, 'thumbnails', thumbnailPublicId),
-    ]);
+    try {
+      // Upload to Cloudinary
+      console.log('Initiating Cloudinary upload...');
+      const [imageResult, thumbnailResult] = await Promise.all([
+        uploadToCloudinaryWithTimeout(image[0].buffer, 'images', imagePublicId),
+        uploadToCloudinaryWithTimeout(thumbnail[0].buffer, 'thumbnails', thumbnailPublicId),
+      ]);
 
-    console.log('Upload successful:', {
-      image: imageResult.secure_url,
-      thumbnail: thumbnailResult.secure_url
-    });
+      console.log('Upload successful:', {
+        image: imageResult.secure_url,
+        thumbnail: thumbnailResult.secure_url
+      });
 
-    // Send success response with required URLs
-    res.status(200).json({
-      image_url: imageResult.secure_url,
-      thumbnail_url: thumbnailResult.secure_url
-    });
+      // Always send response with content
+      return res.status(200).json({
+        success: true,
+        image_url: imageResult.secure_url,
+        thumbnail_url: thumbnailResult.secure_url
+      });
+    } catch (uploadError) {
+      console.error('Cloudinary upload error:', uploadError);
+      return res.status(500).json({
+        error: 'Failed to upload to Cloudinary',
+        details: uploadError.message
+      });
+    }
 
   } catch (error) {
     // Log error with detailed context
@@ -406,6 +415,17 @@ app.post('/.netlify/functions/server/upload', upload.fields([
         thumbnail: req.files.thumbnail?.[0] ? {
           size: req.files.thumbnail[0].size,
           type: req.files.thumbnail[0].mimetype
+        } : 'missing'
+      } : 'no files',
+      cloudinaryConfig: {
+        isConfigured: !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET)
+      }
+    });
+    
+    return res.status(500).json({
+      error: 'Upload failed',
+      details: error.message
+    });
         } : 'missing'
       } : 'no files'
     });
