@@ -426,20 +426,6 @@ app.post('/.netlify/functions/server/upload', upload.fields([
       error: 'Upload failed',
       details: error.message
     });
-        } : 'missing'
-      } : 'no files'
-    });
-
-    // Determine appropriate status code
-    const statusCode = error.message.includes('configuration') ? 500 :
-                      error.message.includes('file size') || 
-                      error.message.includes('file type') ? 400 : 500;
-
-    // Send error response
-    res.status(statusCode).json({
-      error: 'Failed to upload images',
-      details: error.message
-    });
   }
 });
 

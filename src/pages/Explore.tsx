@@ -49,7 +49,7 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
 
     if (selectedCategory !== 'All') {
       filtered = filtered.filter(
-        (img) => img.category.toLowerCase() === selectedCategory.toLowerCase()
+        (img) => (img.category ?? '').toLowerCase() === selectedCategory.toLowerCase()
       );
     }
 

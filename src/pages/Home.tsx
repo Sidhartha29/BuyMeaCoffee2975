@@ -20,7 +20,9 @@ export const Home: React.FC<HomeProps> = ({ onNavigate }) => {
     try {
       const data = await api.getImages(1, 50); // Get first 50 images for sorting
       // Sort by downloads and take top 6
-      const sortedImages = data.images.sort((a: Image, b: Image) => b.downloads - a.downloads).slice(0, 6);
+      const sortedImages = data.images
+        .sort((a: Image, b: Image) => (b.downloads ?? 0) - (a.downloads ?? 0))
+        .slice(0, 6);
       setFeaturedImages(sortedImages as (Image & { profiles: Profile })[]);
     } catch (error) {
       console.error('Error fetching featured images:', error);

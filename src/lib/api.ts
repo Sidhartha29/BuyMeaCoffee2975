@@ -1,15 +1,13 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
-// Debug: print the resolved API base URL at module load so we can verify the value
-// (This will be visible in the browser console when the app loads in dev).
 try {
-  // eslint-disable-next-line no-console
   console.log('[debug] API_BASE_URL =', API_BASE_URL);
 } catch (e) {
   // ignore in environments without console
 }
 
-export interface Profile {
+// Type definitions
+export type Profile = {
   id: string;
   name: string;
   bio: string;
@@ -17,101 +15,146 @@ export interface Profile {
   wallet_balance: number;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface Image {
+export type Image = {
   id: string;
-  creator_id: string;
+  url?: string;
+  // Cloudinary / server may return `image_url` as the full-size image url
+  image_url?: string;
+  thumbnail_url: string;
   title: string;
   description: string;
-  image_url: string;
-  thumbnail_url: string;
   price: number;
-  downloads: number;
-  category: string;
   created_at: string;
   updated_at: string;
-  profiles?: Profile;
-}
+  owner_id?: string;
+  // Backwards-compatible creator field used across the app
+  creator_id?: string;
+  // Additional fields used by UI
+  downloads?: number;
+  category?: string;
+};
 
-export interface Transaction {
+export type Transaction = {
   id: string;
   buyer_id: string;
-  creator_id: string;
+  // Historically named seller; modern code expects creator_id
+  seller_id?: string;
+  creator_id?: string;
   image_id: string;
   amount: number;
-  status: 'pending' | 'completed' | 'failed';
-  stripe_payment_id: string | null;
+  status?: 'pending' | 'completed' | 'failed';
+  stripe_payment_id?: string | null;
   created_at: string;
-}
+};
 
-export interface DownloadToken {
+export type DownloadToken = {
   id: string;
-  transaction_id: string;
-  buyer_id: string;
   image_id: string;
+  buyer_id: string;
   token: string;
-  expires_at: string;
   used: boolean;
   created_at: string;
-}
+};
 
-class ApiClient {
-  private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
-    console.log(`[API] Making request to: ${url}`);
-    
+type UploadResponse = {
+  image_url: string;
+  thumbnail_url: string;
+};
+
+type RequestOptions = {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: any;
+  credentials?: RequestCredentials;
+};
+
+export class Api {
+  private async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    const url = `${API_BASE_URL}${path}`;
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+        ...options.headers,
+      },
+      credentials: options.credentials || 'include',
+    });
+
+    if (!response.ok) {
+      let errorMessage = `HTTP error! status: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch (e) {
+        console.error('[API] Failed to parse error response:', e);
+      }
+      throw new Error(errorMessage);
+    }
+
     try {
-      const response = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options?.headers,
-        },
-        ...options,
-      });
+      return await response.json();
+    } catch (e) {
+      console.error('[API] Failed to parse success response:', e);
+      throw new Error('Server returned invalid JSON response');
+    }
+  }
 
-      console.log(`[API] Response status:`, response.status);
+  async uploadImages(imageFile: File, thumbnailFile: File): Promise<UploadResponse> {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    formData.append('thumbnail', thumbnailFile);
 
-      if (!response.ok) {
-        let errorData;
-        try {
-          const errorText = await response.text();
-          if (errorText) {
-            try {
-              errorData = JSON.parse(errorText);
-            } catch {
-              errorData = { error: errorText };
-            }
-          }
-        } catch (e) {
-          errorData = { error: 'Unknown error' };
+    const url = `${API_BASE_URL}/upload`;
+    console.log('[Upload] Starting upload to:', url);
+    console.log('[Upload] Files:', { image: imageFile, thumbnail: thumbnailFile });
+
+    const uploadWithRetry = async (retryCount = 0): Promise<Response> => {
+      try {
+        return await fetch(url, {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+        });
+      } catch (error) {
+        if (retryCount < 3) {
+          console.log(`[Upload] Retry attempt ${retryCount + 1}`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return uploadWithRetry(retryCount + 1);
         }
-
-        const error = new Error(errorData?.message || errorData?.error || `HTTP error ${response.status}`);
-        (error as any).status = response.status;
-        (error as any).response = { status: response.status, data: errorData };
         throw error;
       }
+    };
 
-      // For successful responses, try to parse JSON
+    try {
+      const response = await uploadWithRetry();
+      if (!response.ok) {
+        let errorMessage = 'Failed to upload images';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          console.error('[Upload] Failed to parse error response:', e);
+        }
+        throw new Error(errorMessage);
+      }
+
       try {
         const data = await response.json();
-        console.log(`[API] Success response:`, data);
+        console.log('[Upload] Upload successful:', data);
         return data;
       } catch (e) {
-        // If response is empty or not JSON
-        if (response.status === 204) {
-          return null as T;
-        }
-        throw new Error('Invalid JSON response');
+        console.error('[Upload] Failed to parse success response:', e);
+        throw new Error('Server returned invalid response');
       }
     } catch (error) {
-      console.error(`[API] Request failed:`, error);
+      console.error('[Upload] Upload failed:', error);
       throw error;
     }
   }
 
-  // Profiles
+  // Profile methods
   async getProfiles(): Promise<Profile[]> {
     return this.request('/profiles');
   }
@@ -134,7 +177,7 @@ class ApiClient {
     });
   }
 
-  // Images
+  // Image methods
   async getImages(page?: number, limit?: number): Promise<{ images: Image[]; pagination: { page: number; pages: number; total: number } }> {
     const queryParams = new URLSearchParams();
     if (page) queryParams.append('page', page.toString());
@@ -149,64 +192,6 @@ class ApiClient {
 
   async getImagesByCreator(creatorId: string): Promise<Image[]> {
     return this.request(`/images/creator/${creatorId}`);
-  }
-
-  async uploadImages(imageFile: File, thumbnailFile: File): Promise<{ image_url: string; thumbnail_url: string }> {
-    const formData = new FormData();
-    formData.append('image', imageFile);
-    formData.append('thumbnail', thumbnailFile);
-
-    const url = `${API_BASE_URL}/upload`;
-    console.log('[Upload] Starting upload to:', url);
-    console.log('[Upload] Files:', { image: imageFile, thumbnail: thumbnailFile });
-
-    // Set longer timeout for upload
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal,
-        credentials: 'include',
-      });
-
-      clearTimeout(timeoutId);
-      console.log('[Upload] Response status:', response.status);
-
-      // Always try to read the response body
-      let responseBody;
-      try {
-        responseBody = await response.json();
-        console.log('[Upload] Response body:', responseBody);
-      } catch (error) {
-        console.error('[Upload] Failed to parse response as JSON:', error);
-        throw new Error(`Upload failed: Server returned status ${response.status} with invalid JSON`);
-      }
-
-      // Check for error responses
-      if (!response.ok || responseBody.error) {
-        const errorMessage = responseBody.error || responseBody.details || `Upload failed: ${response.status} ${response.statusText}`;
-        console.error('[Upload] Error response:', errorMessage);
-        throw new Error(errorMessage);
-      }
-
-      // Validate response has required fields
-      if (!responseBody.image_url || !responseBody.thumbnail_url) {
-        console.error('[Upload] Invalid success response:', responseBody);
-        throw new Error('Upload failed: Server response missing required URLs');
-      }
-
-      console.log('[Upload] Success response:', responseBody);
-      return {
-        image_url: responseBody.image_url,
-        thumbnail_url: responseBody.thumbnail_url
-      };
-    } catch (error) {
-      console.error('[Upload] Request failed:', error);
-      throw error;
-    }
   }
 
   async createImage(image: Omit<Image, 'created_at' | 'updated_at'>): Promise<Image> {
@@ -229,7 +214,7 @@ class ApiClient {
     });
   }
 
-  // Transactions
+  // Transaction methods
   async getTransactions(): Promise<Transaction[]> {
     return this.request('/transactions');
   }
@@ -249,7 +234,7 @@ class ApiClient {
     });
   }
 
-  // Download Tokens
+  // Download token methods
   async getDownloadTokensByBuyer(buyerId: string): Promise<DownloadToken[]> {
     return this.request(`/download-tokens/buyer/${buyerId}`);
   }
@@ -272,4 +257,6 @@ class ApiClient {
   }
 }
 
-export const api = new ApiClient();
+// Export a singleton instance
+export const api = new Api();
+export default api;

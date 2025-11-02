@@ -102,7 +102,7 @@ export const Profile: React.FC<ProfileProps> = ({ creatorId, onNavigate }) => {
                 <div className="flex items-center space-x-2 bg-amber-50 px-4 py-2 rounded-full">
                   <Download className="w-5 h-5 text-amber-600" />
                   <span className="font-medium text-gray-900">
-                    {images.reduce((sum, img) => sum + img.downloads, 0)} Downloads
+                    {images.reduce((sum, img) => sum + (img.downloads ?? 0), 0)} Downloads
                   </span>
                 </div>
               </div>
