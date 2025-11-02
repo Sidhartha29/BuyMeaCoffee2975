@@ -12,7 +12,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   signUp: (email: string, password: string, name: string) => Promise<void>;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (userId: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -74,34 +74,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const signIn = async (email: string) => {
+  const signIn = async (userId: string) => {
     try {
-      // First, try to find existing user by email
-      const profiles = await api.getProfiles();
-      const existingProfile = profiles.find(p => p.id.startsWith('user-') && p.name === email.split('@')[0]);
+      // Try to find existing user by userId
+      const profileData = await api.getProfile(userId);
 
-      if (existingProfile) {
+      if (profileData) {
         // User exists, sign them in
-        const userData = { id: existingProfile.id, email };
+        const userData = { id: profileData.id, email: `${profileData.name}@demo.com` };
         setUser(userData);
         localStorage.setItem('user', JSON.stringify(userData));
-        setProfile(existingProfile);
+        setProfile(profileData);
       } else {
         // User doesn't exist, create new profile and sign them in
-        const userData = { id: `user-${Date.now()}`, email };
+        const userData = { id: userId, email: `${userId}@demo.com` };
         setUser(userData);
         localStorage.setItem('user', JSON.stringify(userData));
 
         await api.createProfile({
-          id: userData.id,
-          name: email.split('@')[0], // Use email prefix as default name
+          id: userId,
+          name: userId, // Use userId as default name
           bio: '',
           profile_pic: '',
           wallet_balance: 0,
         });
 
-        const profileData = await fetchProfile(userData.id);
-        setProfile(profileData);
+        const newProfileData = await fetchProfile(userId);
+        setProfile(newProfileData);
       }
     } catch (error) {
       console.error('Error during sign in:', error);

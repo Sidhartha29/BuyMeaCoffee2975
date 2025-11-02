@@ -20,7 +20,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigate }) => {
 
     try {
       await signIn(email, password);
-      onNavigate('home');
+      onNavigate('dashboard');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to sign in');
     } finally {
