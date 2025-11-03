@@ -8,6 +8,16 @@ import connectDB from './connection.js';
 import { Profile, Image, Transaction, DownloadToken } from './models.js';
 import serverless from 'serverless-http';
 
+import cors from "cors";
+app.use(cors({
+  origin: [
+    "http://localhost:5173",       // local dev
+    "https://buymeacoffee297518.netlify.app/" // your live site
+  ],
+  credentials: true
+}));
+
+
 // Load environment variables
 dotenv.config();
 
