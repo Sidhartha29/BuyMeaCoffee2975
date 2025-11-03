@@ -1,16 +1,53 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import mongoose from 'mongoose';
 import { Profile, Image, Transaction, DownloadToken } from './models.js';
 import connectDB from './connection.js';
+
+const delay = (ms) => new Promise((res) => setTimeout(res, ms));
+
+const runWithRetries = async (fn, attempts = 5, name = 'operation') => {
+  let lastErr;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      console.warn(`Attempt ${i} for ${name} failed:`, err && err.message ? err.message : err);
+      if (i < attempts) {
+        const backoff = 500 * Math.pow(2, i);
+        console.log(`Waiting ${backoff}ms before retrying ${name}...`);
+        await delay(backoff);
+      }
+    }
+  }
+  throw lastErr;
+};
 
 const seedDatabase = async () => {
   try {
     await connectDB();
 
-    // Clear existing data
-    await Profile.deleteMany({});
-    await Image.deleteMany({});
-    await Transaction.deleteMany({});
-    await DownloadToken.deleteMany({});
+    // Wait for mongoose to be connected
+    const waitForConnection = async () => {
+      const maxWait = 15000; // 15s
+      const start = Date.now();
+      while (mongoose.connection.readyState !== 1) {
+        if (Date.now() - start > maxWait) {
+          throw new Error('Timed out waiting for mongoose connection');
+        }
+        await delay(200);
+      }
+    };
+
+    await waitForConnection();
+
+    // Clear existing data with retries
+    await runWithRetries(() => Profile.deleteMany({}), 5, 'Profile.deleteMany');
+    await runWithRetries(() => Image.deleteMany({}), 5, 'Image.deleteMany');
+    await runWithRetries(() => Transaction.deleteMany({}), 5, 'Transaction.deleteMany');
+    await runWithRetries(() => DownloadToken.deleteMany({}), 5, 'DownloadToken.deleteMany');
 
     console.log('Existing data cleared');
 
@@ -23,16 +60,18 @@ const seedDatabase = async () => {
         profile_pic: 'https://example.com/sidhartha.jpg',
         wallet_balance: 0.00,
         created_at: new Date('2024-01-15'),
-        updated_at: new Date('2024-10-01')
+        updated_at: new Date('2024-10-01'),
+        password: 'sidhartha123' // Unique password for user-1
       },
       {
         id: 'user-2',
         name: 'Alice Johnson',
         bio: 'Nature photographer capturing the beauty of the world',
         profile_pic: 'https://example.com/alice.jpg',
-        wallet_balance: 150.00,
+        wallet_balance: 0.00,
         created_at: new Date('2024-02-20'),
-        updated_at: new Date('2024-09-15')
+        updated_at: new Date('2024-09-15'),
+        password: 'alice456' // Unique password for user-2
       },
       {
         id: 'user-3',
@@ -54,7 +93,7 @@ const seedDatabase = async () => {
       }
     ];
 
-    await Profile.insertMany(profiles);
+    await runWithRetries(() => Profile.insertMany(profiles), 5, 'Profile.insertMany');
     console.log('Profiles seeded');
 
     // Seed images (using placeholder URLs - replace with actual Cloudinary URLs after setup)
@@ -139,7 +178,7 @@ const seedDatabase = async () => {
       }
     ];
 
-    await Image.insertMany(images);
+    await runWithRetries(() => Image.insertMany(images), 5, 'Image.insertMany');
     console.log('Images seeded');
 
     // Seed transactions
@@ -166,7 +205,7 @@ const seedDatabase = async () => {
       }
     ];
 
-    await Transaction.insertMany(transactions);
+    await runWithRetries(() => Transaction.insertMany(transactions), 5, 'Transaction.insertMany');
     console.log('Transactions seeded');
 
     // Seed download tokens
@@ -193,7 +232,7 @@ const seedDatabase = async () => {
       }
     ];
 
-    await DownloadToken.insertMany(downloadTokens);
+    await runWithRetries(() => DownloadToken.insertMany(downloadTokens), 5, 'DownloadToken.insertMany');
     console.log('Download tokens seeded');
 
     console.log('Database seeded successfully!');

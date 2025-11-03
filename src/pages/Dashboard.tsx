@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Upload,
-  Trash2,
   DollarSign,
   Download,
   Image as ImageIcon,
@@ -14,7 +13,7 @@ interface DashboardProps {
   onNavigate: (page: string) => void;
 }
 
-const categories = ['Nature', 'Architecture', 'Portrait', 'Abstract', 'Street', 'Wildlife', 'Landscape'];
+const categories = ['Nature', 'Architecture', 'Portrait', 'Abstract', 'Street', 'Wildlife', 'Landscape','Digital Art'];
 
 export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const { user, profile } = useAuth();
@@ -75,7 +74,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       // Upload images to Cloudinary first
       const uploadResult = await api.uploadImages(imageFile, thumbnailFile);
 
-      // Create image record in database
+      // Create image record in database (force price=0)
       await api.createImage({
         id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         creator_id: user.id,
@@ -83,20 +82,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         description: uploadForm.description,
         image_url: uploadResult.image_url,
         thumbnail_url: uploadResult.thumbnail_url,
-        price: parseFloat(uploadForm.price) / 83, // Convert INR to USD for storage
+        price: 0,
         category: uploadForm.category,
         downloads: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       });
 
       setShowUploadModal(false);
       setUploadForm({ title: '', description: '', price: '', category: 'Nature' });
       setImageFile(null);
       setThumbnailFile(null);
-      fetchImages();
-      fetchStats();
+      await fetchImages();
+      await fetchStats();
     } catch (error) {
       console.error('Error uploading image:', error);
-      alert('Failed to upload image. Please try again.');
+      alert('Failed to upload image.');
     } finally {
       setUploading(false);
     }
@@ -104,16 +105,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
 
 
 
-  const handleDelete = async (imageId: string) => {
-    if (!confirm('Are you sure you want to delete this image?')) return;
-
+  const handleDownload = (image: Image) => {
     try {
-      await api.deleteImage(imageId);
-      fetchImages();
-      fetchStats();
-    } catch (error) {
-      console.error('Error deleting image:', error);
-      alert('Failed to delete image. Please try again.');
+      if (!image.image_url) throw new Error('No image URL');
+      const link = document.createElement('a');
+      link.href = image.image_url;
+      const filename = (image.title || image.id || 'image').replace(/[^a-z0-9.-_]/gi, '_');
+      link.download = `${filename}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Download error', err);
+      alert('Failed to download image.');
     }
   };
 
@@ -214,16 +218,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                   <h3 className="text-lg font-bold text-gray-900 mb-2">{image.title}</h3>
                   <p className="text-gray-600 text-sm mb-4 line-clamp-2">{image.description}</p>
                   <div className="flex justify-between items-center mb-4">
-                    <span className="text-xl font-bold text-black">₹{Math.round(image.price * 83)}</span>
+                      <span className="text-xl font-bold text-green-600">Free</span>
                     <span className="text-sm text-gray-500">{image.downloads} downloads</span>
                   </div>
                   <div className="flex space-x-2">
-                    <button
-                      onClick={() => handleDelete(image.id)}
-                      className="flex-1 bg-red-50 text-red-600 px-4 py-2 rounded-lg hover:bg-red-100 transition-colors flex items-center justify-center space-x-2"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      <span>Delete</span>
+                      <button
+                        onClick={() => handleDownload(image)}
+                        className="flex-1 bg-green-50 text-green-600 px-4 py-2 rounded-lg hover:bg-green-100 transition-colors flex items-center justify-center space-x-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Download</span>
                     </button>
                   </div>
                 </div>
@@ -298,21 +302,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Price (INR)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={uploadForm.price}
-                  onChange={(e) => setUploadForm({ ...uploadForm, price: e.target.value })}
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  placeholder="99.99"
-                />
-              </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

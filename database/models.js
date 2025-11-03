@@ -6,7 +6,7 @@ const profileSchema = new mongoose.Schema({
   name: { type: String, required: true },
   bio: { type: String, default: '' },
   profile_pic: { type: String, default: '' },
-  wallet_balance: { type: Number, default: 0, min: 0 },
+  password: { type: String },  // Add password field
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 });
@@ -22,7 +22,7 @@ const imageSchema = new mongoose.Schema({
   description: { type: String, default: '' },
   image_url: { type: String, required: true },
   thumbnail_url: { type: String, required: true },
-  price: { type: Number, required: true, min: 0 },
+    price: { type: Number, default: 0, required: true, min: 0 },
   downloads: { type: Number, default: 0, min: 0 },
   category: { type: String, default: 'general' },
   created_at: { type: Date, default: Date.now },

@@ -9,7 +9,9 @@ import { Profile, Image, Transaction, DownloadToken } from './models.js';
 import serverless from 'serverless-http';
 
 // Load environment variables
-dotenv.config();
+dotenv.config({
+  path: '../.env'  // Look for .env in parent directory
+});
 
 // Configure Cloudinary
 cloudinary.config({
@@ -68,25 +70,8 @@ app.options('*', cors());
 app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ limit: '200mb', extended: true }));
 
-// NOTE: we don't call connectDB() immediately here because for local
-// development we want to ensure the DB connection completes (or fails)
-// before we start accepting requests — this makes startup ordering
-// deterministic and produces clearer logs when something goes wrong.
-// The local start path below calls `connectDB()` and awaits it.
-
-// Attach global error handlers so unexpected rejections/exceptions
-// are logged and visible during development.
-process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled Rejection at:', reason);
-});
-
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception thrown:', err);
-  // In production you might want to restart the process. For local
-  // development we keep it simple and exit so the developer can inspect
-  // the state if desired.
-  process.exit(1);
-});
+// Connect to database
+connectDB();
 
 // Path alias middleware to support both /api and /.netlify/functions/server paths
 app.use((req, res, next) => {
@@ -120,8 +105,8 @@ app.get('/.netlify/functions/server/images', async (req, res) => {
       pagination: {
         page,
         pages,
-        total,
-      },
+        total
+      }
     });
   } catch (error) {
     console.error('[Images] Error fetching all:', error);
@@ -182,7 +167,7 @@ app.get('/.netlify/functions/server/images/creator/:creatorId', async (req, res)
 
 app.get('/.netlify/functions/server/images/:id', async (req, res) => {
   try {
-      const image = await Image.findOne({ id: req.params.id });
+    const image = await Image.findById(req.params.id);
     if (!image) return res.status(404).json({ error: 'Image not found' });
     res.json(image);
   } catch (error) {
@@ -204,26 +189,11 @@ app.put('/.netlify/functions/server/images/:id', async (req, res) => {
 
 app.delete('/.netlify/functions/server/images/:id', async (req, res) => {
   try {
-    const image = await Image.findOne({ id: req.params.id }); // Change to findOne by id field
-    if (!image) {
-      return res.status(404).json({ error: 'Image not found' });
-    }
-
-    // Delete from cloudinary if image_url exists
-    if (image.image_url) {
-      try {
-        const publicId = image.image_url.split('/').pop().split('.')[0];
-        await cloudinary.uploader.destroy(publicId);
-      } catch (cloudinaryError) {
-        console.error('Error deleting from Cloudinary:', cloudinaryError);
-        // Continue with DB deletion even if Cloudinary fails
-      }
-    }
-
+    const image = await Image.findById(req.params.id);
+    if (!image) return res.status(404).json({ error: 'Image not found' });
     await image.deleteOne();
     res.json({ message: 'Image deleted successfully' });
   } catch (error) {
-    console.error('Error during image deletion:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -632,39 +602,23 @@ app.delete('/api/images/:id', async (req, res) => {
 // Export the serverless function
 export const handler = serverless(app);
 
-// Start local server in development — wait for DB connection first so
-// startup logs are meaningful and the server won't accept requests
-// before DB is ready.
+// Only start the server in development
 if (process.env.NODE_ENV !== 'production') {
-  const startLocalServer = async () => {
-    try {
-      console.log('Starting local server — attempting to connect to DB...');
-      await connectDB();
-      const PORT = process.env.PORT || 5000;
-      app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
+  const PORT = process.env.PORT || 5001;  // Changed to 5001
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  }).on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      console.log(`Port ${PORT} is busy, trying port ${PORT + 1}`);
+      process.env.PORT = (PORT + 1).toString();
+      app.listen(PORT + 1, () => {
+        console.log(`Server running on port ${PORT + 1}`);
       });
-    } catch (err) {
-      console.error('Failed to start local server:', err && err.message ? err.message : err);
-      // Exit with non-zero so dev can see the failure in terminal
+    } else {
+      console.error('Failed to start server:', error);
       process.exit(1);
     }
-  };
-
-  startLocalServer();
-
-  // Graceful shutdown handlers
-  const gracefulShutdown = async () => {
-    console.log('Shutting down server...');
-    try {
-      await mongoose.disconnect();
-      console.log('MongoDB disconnected');
-    } catch (e) {
-      console.warn('Error during mongoose disconnect:', e && e.message ? e.message : e);
-    }
-    process.exit(0);
-  };
-
-  process.on('SIGINT', gracefulShutdown);
-  process.on('SIGTERM', gracefulShutdown);
+  });
+}
+  });
 }

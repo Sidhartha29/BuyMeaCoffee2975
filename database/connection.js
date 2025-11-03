@@ -1,61 +1,69 @@
 import mongoose from 'mongoose';
 
 const connectDB = async () => {
-  try {
-    // Prevent multiple connections in serverless environments
-    if (mongoose.connection.readyState >= 1) {
-      return;
-    }
-
-    const mongoURI = process.env.MONGODB_URI;
-    if (!mongoURI) {
-      throw new Error('MONGODB_URI environment variable is not set');
-    }
-
-    // Use different connection options for production
-    const baseOptions = {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    };
-
-    const prodOptions = {
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
-      maxPoolSize: 10,
-    };
-
-    const options = process.env.NODE_ENV === 'production'
-      ? { ...baseOptions, ...prodOptions }
-      : baseOptions;
-
-    // Retry loop with backoff to make the server more resilient to transient
-    // network issues or startup ordering (e.g., DB starts after app).
-    const maxAttempts = 5;
-    let attempt = 0;
-    while (attempt < maxAttempts) {
-      try {
-        attempt += 1;
-        await mongoose.connect(mongoURI, options);
-        console.log('MongoDB connected successfully');
-        return;
-      } catch (err) {
-        console.error(`MongoDB connection attempt ${attempt} failed:`, err.message || err);
-        if (attempt >= maxAttempts) {
-          console.error('MongoDB connection failed after max attempts. Continuing without DB connection.');
-          // Don't throw here to avoid crashing serverless functions or the process.
-          // Endpoints should check connection state and return appropriate errors.
-          return;
-        }
-        // Exponential backoff before retrying
-        const backoffMs = 1000 * Math.pow(2, attempt);
-        await new Promise((resolve) => setTimeout(resolve, backoffMs));
-      }
-    }
-  } catch (error) {
-    // Fatal configuration problems (like missing URI) should still be logged.
-    console.error('MongoDB initialisation error:', error);
-    // Do not re-throw — keep process running so API can respond with JSON errors.
+  // Prevent multiple connections in serverless environments
+  if (mongoose.connection.readyState >= 1) {
     return;
+  }
+
+  const mongoURI = process.env.MONGODB_URI;
+  if (!mongoURI) {
+    console.error('MONGODB_URI environment variable is not set');
+    return;
+  }
+
+  // Connection options for production and development
+  const options = process.env.NODE_ENV === 'production'
+    ? {
+        serverSelectionTimeoutMS: 10000,
+        socketTimeoutMS: 45000,
+        maxPoolSize: 10
+      }
+    : {
+        serverSelectionTimeoutMS: 5000
+      };
+
+  // Try to connect with retries
+  const maxAttempts = 5;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await mongoose.connect(mongoURI, options);
+      console.log('MongoDB connected successfully');
+      return;
+    } catch (err) {
+      console.error(`MongoDB Atlas connection attempt ${attempt} failed:`, err.message);
+      
+      // On last attempt, try local MongoDB in development
+      if (attempt === maxAttempts) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('\nTo fix MongoDB connection:');
+          console.log('1. Start local MongoDB:');
+          console.log('   > mongod');
+          console.log('2. OR set MONGODB_URI in .env:');
+          console.log('   MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>/<dbname>');
+          console.log('3. For MongoDB Atlas:');
+          console.log('   - Whitelist your IP: https://www.mongodb.com/docs/atlas/security-whitelist/');
+          console.log('   - Check credentials and cluster status in Atlas dashboard\n');
+
+          try {
+            console.log('Attempting to connect to local MongoDB...');
+            await mongoose.connect('mongodb://localhost:27017/buymeacoffee', {
+              serverSelectionTimeoutMS: 5000
+            });
+            console.log('Connected to local MongoDB successfully');
+            return;
+          } catch (localError) {
+            console.error('Local MongoDB connection failed:', localError.message);
+          }
+        }
+        console.error('MongoDB connection failed after max attempts');
+        return;
+      }
+
+      // Wait before next retry using exponential backoff
+      const backoffMs = 1000 * Math.pow(2, attempt - 1);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+    }
   }
 };
 

@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import * as React from 'react';
+const { createContext, useContext, useEffect, useState } = React;
 import { api, Profile } from '../lib/api';
 
 // Mock user type for now since we're migrating away from Supabase
@@ -26,7 +27,6 @@ export function useAuth() {
   }
   return context;
 }
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<MockUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -73,45 +73,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newUser = { id: `user-${Date.now()}`, email };
     setUser(newUser);
     localStorage.setItem('user', JSON.stringify(newUser));
-    await api.createProfile({
+    const now = new Date().toISOString();
+    const created = await api.createProfile({
       id: newUser.id,
       name,
       bio: '',
       profile_pic: '',
       wallet_balance: 0,
+      created_at: now,
+      updated_at: now,
     });
+    setProfile(created as Profile);
   };
 
   const signIn = async (userId: string, _password: string) => {
     try {
       console.log('Attempting to sign in with userId:', userId);
-      
-      let profileData;
-      try {
-        profileData = await api.getProfile(userId);
-        console.log('Profile data received:', profileData);
 
+      try {
+        const profileData = await api.getProfile(userId);
         if (profileData) {
-          // User exists, sign them in
-          console.log('Existing user found, signing in');
-          const userData = { id: profileData.id, email: `${profileData.name}@demo.com` };
+          const userData = { id: profileData.id, email: `${profileData.name || profileData.id}@demo.com` };
           setUser(userData);
           localStorage.setItem('user', JSON.stringify(userData));
           setProfile(profileData);
-          return; // Early return on success
+          return;
         }
       } catch (err: any) {
-        // If error is not 404, rethrow it
-        if (err.response?.status !== 404) {
-          console.error('Error during profile fetch:', err);
-          throw new Error(err.response?.data?.message || 'Failed to sign in');
+        const msg = (err && err.message) ? String(err.message).toLowerCase() : '';
+        // If profile not found, create a new one. Otherwise rethrow.
+        if (!msg.includes('no profile') && !msg.includes('not found') && !msg.includes('404')) {
+          console.error('Unexpected error fetching profile:', err);
+          throw err;
         }
-        // If 404, continue to create new profile
-        console.log('User not found, will create new profile');
+        console.log('Profile not found, creating new profile for', userId);
       }
 
-      // User doesn't exist, create new profile and sign them in
-      console.log('Creating new profile for user:', userId);
+      // Create a new profile and sign in
       const userData = { id: userId, email: `${userId}@demo.com` };
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
@@ -119,7 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const now = new Date().toISOString();
       const newProfile = {
         id: userId,
-        name: userId, // Use userId as default name
+        name: userId,
         bio: '',
         profile_pic: '',
         wallet_balance: 0,
@@ -127,8 +125,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updated_at: now,
       };
 
-      await api.createProfile(newProfile);
-      setProfile(newProfile);
+      const created = await api.createProfile(newProfile);
+      setProfile(created as Profile);
     } catch (error) {
       console.error('Error during sign in:', error);
       throw new Error('Failed to sign in. Please try again.');
