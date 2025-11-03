@@ -264,6 +264,13 @@ app.get('/.netlify/functions/server', (req, res) => {
   res.json({ message: 'API is working!' });
 });
 
+// Health check - returns server + DB status
+app.get('/.netlify/functions/server/health', (req, res) => {
+  const dbState = mongoose.connection ? mongoose.connection.readyState : 0;
+  // readyState: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+  res.json({ status: 'ok', db: { readyState: dbState } });
+});
+
 // Helper function to upload to Cloudinary with timeout
 const uploadToCloudinaryWithTimeout = async (buffer, folder, publicId) => {
   return Promise.race([

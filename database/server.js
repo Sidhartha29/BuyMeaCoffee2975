@@ -55,6 +55,12 @@ const uploadToCloudinary = (buffer, folder, publicId) => {
 
 // Routes
 
+// Health check - returns server + DB status
+app.get('/health', (req, res) => {
+  const dbState = mongoose.connection ? mongoose.connection.readyState : 0;
+  res.json({ status: 'ok', db: { readyState: dbState } });
+});
+
 // Upload image endpoint
 app.post('/api/upload', upload.fields([
   { name: 'image', maxCount: 1 },
