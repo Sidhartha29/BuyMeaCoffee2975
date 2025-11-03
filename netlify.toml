@@ -19,4 +19,6 @@
   force = true
 
 [context.production.environment]
-  VITE_API_BASE_URL = "https://buymeacoffee297518.netlify.app/.netlify/functions/server"
+  # Use a relative functions path so client requests are same-origin when served from Netlify.
+  # This avoids CORS issues when the site domain differs from the one used during development.
+  VITE_API_BASE_URL = "/.netlify/functions/server"

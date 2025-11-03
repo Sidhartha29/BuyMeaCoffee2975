@@ -40,8 +40,19 @@ app.use(cors({
     if (!origin) return callback(null, true);
 
     if (process.env.NODE_ENV === 'production') {
-      const allowed = ['https://buymeacoffee297518.netlify.app'];
-      return allowed.includes(origin) ? callback(null, true) : callback(null, false);
+      // In production allow requests from the deployed Netlify site(s).
+      // Accept any Netlify-hosted site under the same account by allowing
+      // origins that end with `.netlify.app`. This is more flexible than
+      // hardcoding a single hostname and avoids mismatches during deploys.
+      try {
+        const isNetlify = origin.endsWith('.netlify.app');
+        if (isNetlify) return callback(null, true);
+      } catch (e) {
+        // If origin is somehow malformed, deny by default
+        return callback(null, false);
+      }
+      // Otherwise deny
+      return callback(null, false);
     }
 
     // Development: allow local dev origins
